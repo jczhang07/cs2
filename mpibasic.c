@@ -19,14 +19,13 @@ static double Ya[M];
 
 // Petsc MATMPIAIJ matrix
 typedef struct {
-  int     m, n;            // local row/column size
-  int     M, N;            // global row/cloum size
-  int    *i;               // row pointer
-  int    *j;               // column indices
-  double *a;               // values
-  int     rstart, rend;    // [start, end) of row indices on this process
-  int     cstart, cend;    // [start, end) of column indices on this process
-  int    *rrange, *crange; // row/column range on all processes
+  int     m, n;   // local row/column size
+  int     M, N;   // global row/cloum size
+  int    *i;      // row pointer
+  int    *j;      // column indices
+  double *a;      // values
+  int     rstart; // start row index on this process
+  int     cstart; // start column index on this process
 } Mat;
 
 // Petsc VECMPI vector
@@ -52,21 +51,13 @@ int main(int argc, char **argv)
   m = M / size + ((M % size) > rank ? 1 : 0); // Actually in petsc one can set m arbitrarily, as long as SUM(m) = M
   n = N / size + ((N % size) > rank ? 1 : 0); // Actually in petsc one can set n arbitrarily, as long as SUM(n) = N
 
-  // Compute A row ownership
-  A.rrange    = (int *)malloc(sizeof(int) * (size + 1));
-  A.rrange[0] = 0;
-  MPI_Allgather(&m, 1, MPI_INT, A.rrange + 1, 1, MPI_INT, MPI_COMM_WORLD);
-  for (int i = 0; i < size; i++) A.rrange[i + 1] += A.rrange[i];
-  A.rstart = A.rrange[rank];
-  A.rend   = A.rrange[rank + 1];
+  // Compute A row layout
+  MPI_Exscan(&m, &A.rstart, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
+  if (rank == 0) A.rstart = 0; // otherwise undefined by MPI_Exscan
 
-  // Compute A column partition. Columns are not distributed, but have an imaginary partition conforming to the distribution of x in y = Ax
-  A.crange    = (int *)malloc(sizeof(int) * (size + 1));
-  A.crange[0] = 0;
-  MPI_Allgather(&n, 1, MPI_INT, A.crange + 1, 1, MPI_INT, MPI_COMM_WORLD);
-  for (int i = 0; i < size; i++) A.crange[i + 1] += A.crange[i];
-  A.cstart = A.crange[rank];
-  A.cend   = A.crange[rank + 1];
+  // Compute A column layout. Columns are not distributed, but have a layout conforming to the distribution of x in y = Ax
+  MPI_Exscan(&n, &A.cstart, 1, MPI_INT, MPI_SUM, MPI_COMM_WORLD);
+  if (rank == 0) A.cstart = 0;
 
   A.m = m;
   A.M = M;
@@ -99,10 +90,16 @@ int main(int argc, char **argv)
 
   if (N % size) {
     int *recvcounts = (int *)malloc(sizeof(int) * size);
+    int *disp       = (int *)malloc(sizeof(int) * size);
 
-    for (int i = 0; i < size; i++) recvcounts[i] = A.crange[i + 1] - A.crange[i];
-    MPI_Allgatherv(x.a, x.n, MPI_DOUBLE, X, recvcounts, A.crange, MPI_DOUBLE, MPI_COMM_WORLD);
+    MPI_Allgather(&n, 1, MPI_INT, recvcounts, 1, MPI_INT, MPI_COMM_WORLD);
+
+    disp[0] = 0;
+    for (int i = 1; i < size; i++) disp[i] = disp[i - 1] + recvcounts[i - 1];
+
+    MPI_Allgatherv(x.a, x.n, MPI_DOUBLE, X, recvcounts, disp, MPI_DOUBLE, MPI_COMM_WORLD);
     free(recvcounts);
+    free(disp);
   } else { // A columns are distributed evenly
     MPI_Allgather(x.a, x.n, MPI_DOUBLE, X, x.n, MPI_DOUBLE, MPI_COMM_WORLD);
   }
@@ -117,8 +114,6 @@ int main(int argc, char **argv)
   for (int i = 0; i < A.m; i++) norm += (y.a[i] - z.a[i]) * (y.a[i] - z.a[i]);
   MPI_Allreduce(MPI_IN_PLACE, &norm, 1, MPI_DOUBLE, MPI_SUM, MPI_COMM_WORLD);
 
-  free(A.rrange);
-  free(A.crange);
   free(A.i);
   free(X);
 
