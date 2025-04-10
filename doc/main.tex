@@ -231,12 +231,17 @@ as if $x$ was not distributed.
 %   % \item [Challenge 5]: Understand the {\tt MPI_Reduce} operation getting the final norm of $||y - z||$.
 % \end{description}
 
-\section{Conclusion and future work}
+\section{Conclusion, future work and acknowledgements}
 We described a sequential and an MPI basic implementations of the SpMV kernel
 in the context of the PETSc library, provided standalone C code and identified
 some challenges for the scientifc software verfication community.
 In the future, we'd like to add other variants,
 such as the MPI optimized implementation used by PETSc, and GPU implementations, to make the challenge code closer to real code.
+
+% \section{Acknowledgements}
+% This work is supported by the U.S. Department of Energy, Office of Science,
+% the Scientific Discovery through Advanced Computing (SciDAC-5) program, the FASTMath institute.
+This work is supported by the U.S. Department of Energy, Office of Science, the SciDAC-5 FASTMath Institute.
 
 \nocite{*}
 \bibliographystyle{eptcs}
