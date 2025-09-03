@@ -1,9 +1,9 @@
 #!/usr/bin/env python
 import numpy as np
 from scipy.sparse import csr_matrix
-M = 32
-N = 36
-NNZ = 50
+M = 4
+N = 10
+NNZ = 33
 data = np.random.randint(1, 10, size=NNZ)  # NNZ nonzeros, in range of [0, 10)
 rows = np.random.randint(0, M, size=NNZ)
 cols = np.random.randint(0, N, size=NNZ)
